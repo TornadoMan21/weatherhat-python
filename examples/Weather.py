@@ -58,10 +58,10 @@ _CONSOLE_FONT_CANDIDATES = [
     "/usr/share/fonts/truetype/freefont/FreeMono.ttf",
 ]
 CONSOLE_FONT = next((p for p in _CONSOLE_FONT_CANDIDATES if os.path.exists(p)), None)
-CONSOLE_FONT_SIZE = 9
-CONSOLE_CHAR_H = 11          # pixel height per line at size 9
-CONSOLE_COLS = 40            # characters per line  (240 px / ~6 px per char)
-CONSOLE_ROWS = DISPLAY_HEIGHT // CONSOLE_CHAR_H   # ~21 rows
+CONSOLE_FONT_SIZE = 45
+CONSOLE_CHAR_H = 55          # pixel height per line at size 45
+CONSOLE_COLS = 8             # characters per line  (240 px / ~27 px per char)
+CONSOLE_ROWS = DISPLAY_HEIGHT // CONSOLE_CHAR_H   # ~4 rows
 
 # ── evdev key maps (normal and shifted) ──────────────────────────────────────
 _KEYMAP = {
