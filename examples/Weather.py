@@ -97,6 +97,25 @@ _KEYMAP_SHIFT = {
 }
 
 
+# Rain gauge is a tipping bucket — readings spike on each tip and are zero
+# between tips. Aggregating into 1-minute buckets gives a meaningful picture.
+RAIN_SAMPLES_PER_MINUTE = 12   # 12 × 5s updates = 60s
+
+
+def _rain_to_minutes(entries):
+    """Sum raw rain samples into 1-minute bucket totals.
+    Returns one history-like entry per minute."""
+    class _E:
+        __slots__ = ("value",)
+        def __init__(self, v): self.value = v
+    buckets = []
+    entries = list(entries)
+    for i in range(0, len(entries), RAIN_SAMPLES_PER_MINUTE):
+        chunk = entries[i:i + RAIN_SAMPLES_PER_MINUTE]
+        buckets.append(_E(sum(e.value for e in chunk)))
+    return buckets if buckets else [_E(0)]
+
+
 def _cvt(entries, func):
     """Return a list of history-like objects with values converted by func.
     Used to convert metric history entries to imperial for display."""
@@ -437,27 +456,29 @@ class WindSpeedView(SensorView):
 
 
 class RainView(SensorView):
-    """Rain."""
+    """Rain — each graph bar shows total inches in a 1-minute bucket."""
 
     title = "Rain"
-    metric = "in/hr"  # was: mm/s
+    metric = "in/min"
 
     def render(self):
         SensorView.render(self)
+        MM_TO_IN = 0.03937
+        minute_buckets = _rain_to_minutes(self._data.rain_mm_sec.history())
         self.heading(
-            self._data.rain_mm_sec.latest().value * 141.73,  # mm/s -> in/hr
+            minute_buckets[-1].value * MM_TO_IN,  # latest 1-min total in inches
             self.metric
         )
         self.footer(self.title.upper())
 
         self.graph(
-            _cvt(self._data.rain_mm_sec.history(), lambda v: v * 141.73),  # mm/s -> in/hr
+            _cvt(minute_buckets, lambda v: v * MM_TO_IN),
             graph_x=4,
             graph_y=70,
             width=self.canvas_width,
             height=self.canvas_height - 130,
-            vmin=self._settings.minimum_rain_mm * 141.73,
-            vmax=self._settings.maximum_rain_mm * 141.73,
+            vmin=0,
+            vmax=0.05,   # 0.05 in/min = ~3 in/hr (very heavy rain); adjust if needed
             bar_width=self.GRAPH_BAR_WIDTH
         )
 
