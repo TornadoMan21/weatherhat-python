@@ -942,14 +942,21 @@ class SensorData:
         self.needle_trail = self.needle_trail[-self.COMPASS_TRAIL_SIZE:]
 
 
-def save_weather_data(temp_c, pressure_hpa, rain_total, wind_speed, wind_gust):
+def save_weather_data(temp_c, pressure_hpa, rain_increment_mm, wind_speed, wind_gust):
+    """Write one log line.
+
+    rain_increment_mm is the rain that fell since the last call (mm),
+    converted to inches here.  Logging the increment rather than the
+    running total means each line is meaningful on its own — a storm is
+    visible as a run of non-zero Rain_in values.
+    """
     timestamp = datetime.datetime.now().strftime("%H:%M:%S")
 
     temp_f = (temp_c * 9 / 5) + 32
-    rain_inches = rain_total * 0.0393701
+    rain_inches = rain_increment_mm * 0.0393701
 
     line = (f"{timestamp}, Temp_F: {temp_f:.2f}, Pressure_hPa: {pressure_hpa:.2f}, "
-            f"Rain_in: {rain_inches:.3f}, Wind_mph: {wind_speed:.2f}, Gust_mph: {wind_gust:.2f}\n")
+            f"Rain_in: {rain_inches:.4f}, Wind_mph: {wind_speed:.2f}, Gust_mph: {wind_gust:.2f}\n")
     with open(RUN_FILENAME, "a") as f:
         f.write(line)
 
@@ -987,18 +994,33 @@ def main():
         image
     )
 
+    # ── logging state ─────────────────────────────────────────────────────────
+    # Skip the first WARMUP_SECONDS so bad startup readings stay out of the log.
+    # Track the last rain_total we saw so each log line shows the *increment*
+    # (rain that fell in that interval) rather than the cumulative total.
+    WARMUP_SECONDS = 10
+    _start_time      = time.time()
+    _last_rain_total = 0.0     # updated every loop; only logged after warmup
+
     while True:
         sensordata.update(interval=5.0)
         viewcontroller.update()
         viewcontroller.render()
         display.display(image.resize((DISPLAY_WIDTH, DISPLAY_HEIGHT)).convert("RGB"))
-        # Save weather data to file
-        temp_c = sensordata.temperature.latest().value
-        pressure = sensordata.pressure.latest().value
-        rain_total = sensordata.rain_total
-        wind_speed = sensordata.wind_speed.latest().value
-        wind_gust = sensordata.wind_speed.gust_mph()
-        save_weather_data(temp_c, pressure, rain_total, wind_speed, wind_gust)
+
+        # Compute incremental rain for this cycle
+        current_rain_total    = sensordata.rain_total
+        rain_increment_mm     = current_rain_total - _last_rain_total
+        _last_rain_total      = current_rain_total
+
+        # Only log once the sensors have had a chance to stabilise
+        if time.time() - _start_time >= WARMUP_SECONDS:
+            temp_c     = sensordata.temperature.latest().value
+            pressure   = sensordata.pressure.latest().value
+            wind_speed = sensordata.wind_speed.latest().value
+            wind_gust  = sensordata.wind_speed.gust_mph()
+            save_weather_data(temp_c, pressure, rain_increment_mm, wind_speed, wind_gust)
+
         time.sleep(1.0 / FPS)
 
 
